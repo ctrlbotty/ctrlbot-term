@@ -617,6 +617,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52560adf09603e58c9a7ee1fe1dcb95a16927b17c127f0ac02d6e768a0e25bc1"
 
 [[package]]
+name = "ctrlbot-term"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serialport",
+ "ssh2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+]
+
+[[package]]
 name = "darling"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3536,20 +3550,6 @@ dependencies = [
  "webview2-com",
  "window-vibrancy",
  "windows",
-]
-
-[[package]]
-name = "tauri-app"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "serialport",
- "ssh2",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 {
-  "name": "tauri-app",
+  "name": "ctrlbot-term",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "bundle": "tauri build && node -e \"const fs=require('fs'),path=require('path');const src=path.join('src-tauri','target','release','bundle');const dst='installers';fs.mkdirSync(dst,{recursive:true});for(const sub of ['nsis','msi']){const dir=path.join(src,sub);if(fs.existsSync(dir)){for(const f of fs.readdirSync(dir)){if(f.endsWith('.exe')||f.endsWith('.msi')){fs.copyFileSync(path.join(dir,f),path.join(dst,f));console.log('Copied installer to '+dst+'/'+f);}}}}\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

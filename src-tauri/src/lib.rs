@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, broadcast, mpsc as tokio_mpsc};
 use std::sync::mpsc as std_mpsc;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use ssh2::Session;
 use std::io::{Read, Write};
 

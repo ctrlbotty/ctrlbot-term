@@ -8,7 +8,22 @@ interface SerialEvent {
   data: number[];
 }
 
-export default function Serial() {
+interface TabItem {
+  id: string;
+  portName: string;
+  baudRate: string;
+  isOpen: boolean;
+}
+
+function SerialInstance({
+  id,
+  isVisible,
+  onUpdateStatus,
+}: {
+  id: string;
+  isVisible: boolean;
+  onUpdateStatus: (id: string, isOpen: boolean, portName: string, baudRate: string) => void;
+}) {
   const [ports, setPorts] = useState<string[]>([]);
   const [selectedPort, setSelectedPort] = useState("");
   const [baudRate, setBaudRate] = useState("9600");
@@ -36,6 +51,10 @@ export default function Serial() {
     showHexRef.current = showHexReceived;
     showVerboseRef.current = showVerboseCrLf;
   }, [showHexReceived, showVerboseCrLf]);
+
+  useEffect(() => {
+    onUpdateStatus(id, isOpen, selectedPort, baudRate);
+  }, [id, isOpen, selectedPort, baudRate]);
 
   const fetchPorts = async () => {
     try {
@@ -96,6 +115,15 @@ export default function Serial() {
     if (sentDataRef.current) sentDataRef.current.scrollTop = sentDataRef.current.scrollHeight;
   }, [sentData]);
 
+  // Cleanup on unmount if open
+  useEffect(() => {
+    return () => {
+      if (isOpen && selectedPort) {
+        invoke("close_serial_port", { portName: selectedPort }).catch(console.error);
+      }
+    };
+  }, [isOpen, selectedPort]);
+
   const toggleConnection = async () => {
     if (!selectedPort) return;
 
@@ -153,9 +181,9 @@ export default function Serial() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-100 font-sans p-4">
+    <div className={`flex-col flex-1 h-full p-4 overflow-hidden ${isVisible ? "flex" : "hidden"}`}>
       {/* Header controls */}
-      <div className="flex items-center space-x-4 mb-4 bg-gray-800 p-3 rounded border border-gray-700">
+      <div className="flex items-center space-x-4 mb-4 bg-gray-900 p-3 rounded-lg border border-gray-800 shrink-0">
         <div>
           <label className="text-xs text-gray-400 block mb-1">Port</label>
           <div className="flex space-x-2">
@@ -163,13 +191,13 @@ export default function Serial() {
               value={selectedPort}
               onChange={(e) => setSelectedPort(e.target.value)}
               disabled={isOpen}
-              className="bg-gray-700 border border-gray-600 text-white px-2 py-1 rounded focus:outline-none focus:border-purple-500 w-32 text-sm"
+              className="bg-gray-800 border border-gray-700 text-white px-2 py-1.5 rounded focus:outline-none focus:border-[#008FD4] w-32 text-xs"
             >
               {ports.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
-            <button onClick={fetchPorts} disabled={isOpen} className="bg-gray-700 hover:bg-gray-600 px-2 rounded text-sm">↻</button>
+            <button onClick={fetchPorts} disabled={isOpen} className="bg-gray-800 hover:bg-[#FFCC00] hover:text-black px-2.5 py-1 rounded text-xs border border-gray-700 transition-colors cursor-pointer">↻</button>
           </div>
         </div>
         
@@ -179,7 +207,7 @@ export default function Serial() {
             value={baudRate}
             onChange={(e) => setBaudRate(e.target.value)}
             disabled={isOpen}
-            className="bg-gray-700 border border-gray-600 text-white px-3 py-1.5 rounded focus:outline-none focus:border-purple-500 w-24 text-sm disabled:opacity-50"
+            className="bg-gray-800 border border-gray-700 text-white px-2 py-1.5 rounded focus:outline-none focus:border-[#008FD4] w-24 text-xs disabled:opacity-50"
           >
             {[9600, 19200, 38400, 57600, 115200].map(rate => (
               <option key={rate} value={rate}>{rate}</option>
@@ -193,7 +221,7 @@ export default function Serial() {
             value={dataBits}
             onChange={(e) => setDataBits(e.target.value)}
             disabled={isOpen}
-            className="bg-gray-700 border border-gray-600 text-white px-3 py-1.5 rounded focus:outline-none focus:border-purple-500 w-16 text-sm disabled:opacity-50"
+            className="bg-gray-800 border border-gray-700 text-white px-2 py-1.5 rounded focus:outline-none focus:border-[#008FD4] w-16 text-xs disabled:opacity-50"
           >
             <option value="7">7</option>
             <option value="8">8</option>
@@ -206,7 +234,7 @@ export default function Serial() {
             value={parity}
             onChange={(e) => setParity(e.target.value)}
             disabled={isOpen}
-            className="bg-gray-700 border border-gray-600 text-white px-3 py-1.5 rounded focus:outline-none focus:border-purple-500 w-20 text-sm disabled:opacity-50"
+            className="bg-gray-800 border border-gray-700 text-white px-2 py-1.5 rounded focus:outline-none focus:border-[#008FD4] w-20 text-xs disabled:opacity-50"
           >
             <option value="none">none</option>
             <option value="even">even</option>
@@ -220,7 +248,7 @@ export default function Serial() {
             value={flowControl}
             onChange={(e) => setFlowControl(e.target.value)}
             disabled={isOpen}
-            className="bg-gray-700 border border-gray-600 text-white px-3 py-1.5 rounded focus:outline-none focus:border-purple-500 w-28 text-sm disabled:opacity-50"
+            className="bg-gray-800 border border-gray-700 text-white px-2 py-1.5 rounded focus:outline-none focus:border-[#008FD4] w-24 text-xs disabled:opacity-50"
           >
             <option value="none">OFF</option>
             <option value="RTS/CTS">RTS/CTS</option>
@@ -231,8 +259,10 @@ export default function Serial() {
         <div className="ml-auto flex items-end">
           <button
             onClick={toggleConnection}
-            className={`px-6 py-1.5 rounded font-medium transition-colors ${
-              isOpen ? "bg-red-600 hover:bg-red-700 text-white" : "bg-purple-600 hover:bg-purple-700 text-white"
+            className={`px-6 py-1.5 rounded text-sm font-semibold transition-colors cursor-pointer ${
+              isOpen
+                ? "bg-red-600 hover:bg-red-700 text-white shadow-md"
+                : "bg-[#008FD4] hover:bg-[#FFCC00] hover:text-black active:bg-[#E5B800] text-white shadow-md"
             }`}
           >
             {isOpen ? "Close" : "Open"}
@@ -240,21 +270,21 @@ export default function Serial() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-rows-2 gap-4">
+      <div className="flex-1 grid grid-rows-2 gap-4 min-h-0">
         {/* Received Data */}
-        <div className="flex flex-col border border-gray-700 rounded bg-gray-800/50">
-          <div className="bg-gray-800 px-3 py-1 text-sm font-semibold border-b border-gray-700 rounded-t flex justify-between items-center">
+        <div className="flex flex-col border border-gray-800 rounded-lg bg-gray-900/60 overflow-hidden">
+          <div className="bg-gray-900 px-3 py-1.5 text-xs font-semibold border-b border-gray-800 flex justify-between items-center text-gray-200 shrink-0">
             <span>Received Data</span>
             <div className="flex space-x-4 items-center">
-              <label className="flex items-center space-x-1 text-xs text-gray-300 font-normal cursor-pointer">
-                <input type="checkbox" checked={showHexReceived} onChange={(e) => setShowHexReceived(e.target.checked)} className="rounded bg-gray-700 border-gray-600" />
+              <label className="flex items-center space-x-1.5 text-xs text-gray-300 font-normal cursor-pointer hover:text-white">
+                <input type="checkbox" checked={showHexReceived} onChange={(e) => setShowHexReceived(e.target.checked)} className="rounded bg-gray-800 border-gray-700 accent-[#008FD4]" />
                 <span>HEX</span>
               </label>
-              <label className="flex items-center space-x-1 text-xs text-gray-300 font-normal cursor-pointer">
-                <input type="checkbox" checked={showVerboseCrLf} onChange={(e) => setShowVerboseCrLf(e.target.checked)} className="rounded bg-gray-700 border-gray-600" />
+              <label className="flex items-center space-x-1.5 text-xs text-gray-300 font-normal cursor-pointer hover:text-white">
+                <input type="checkbox" checked={showVerboseCrLf} onChange={(e) => setShowVerboseCrLf(e.target.checked)} className="rounded bg-gray-800 border-gray-700 accent-[#008FD4]" />
                 <span>Verbose CRLF</span>
               </label>
-              <button onClick={() => setReceivedData("")} className="text-xs text-gray-400 hover:text-white">Clear</button>
+              <button onClick={() => setReceivedData("")} className="text-xs text-gray-400 hover:text-[#FFCC00] cursor-pointer">Clear</button>
             </div>
           </div>
           <textarea
@@ -266,10 +296,10 @@ export default function Serial() {
         </div>
 
         {/* Sent Data */}
-        <div className="flex flex-col border border-gray-700 rounded bg-gray-800/50">
-          <div className="bg-gray-800 px-3 py-1 text-sm font-semibold border-b border-gray-700 rounded-t flex justify-between">
+        <div className="flex flex-col border border-gray-800 rounded-lg bg-gray-900/60 overflow-hidden">
+          <div className="bg-gray-900 px-3 py-1.5 text-xs font-semibold border-b border-gray-800 flex justify-between items-center text-gray-200 shrink-0">
             <span>Sent Data / Logs</span>
-            <button onClick={() => setSentData("")} className="text-xs text-gray-400 hover:text-white">Clear</button>
+            <button onClick={() => setSentData("")} className="text-xs text-gray-400 hover:text-[#FFCC00] cursor-pointer">Clear</button>
           </div>
           <textarea
             ref={sentDataRef}
@@ -281,7 +311,7 @@ export default function Serial() {
       </div>
 
       {/* Send Controls */}
-      <div className="mt-4 flex items-center space-x-3 bg-gray-800 p-3 rounded border border-gray-700">
+      <div className="mt-4 flex items-center space-x-3 bg-gray-900 p-3 rounded-lg border border-gray-800 shrink-0">
         <input
           type="text"
           value={inputMessage}
@@ -289,14 +319,14 @@ export default function Serial() {
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
           disabled={!isOpen}
           placeholder="Type a message..."
-          className="flex-1 bg-transparent text-white focus:outline-none placeholder-gray-500 font-mono disabled:opacity-50"
+          className="flex-1 bg-transparent text-white focus:outline-none placeholder-gray-500 font-mono text-sm disabled:opacity-50"
         />
         
         <select
           value={lineEnding}
           onChange={(e) => setLineEnding(e.target.value as any)}
           disabled={!isOpen || isHex}
-          className="bg-gray-700 border border-gray-600 text-gray-300 px-2 py-1.5 rounded focus:outline-none focus:border-purple-500 text-sm disabled:opacity-50"
+          className="bg-gray-800 border border-gray-700 text-gray-300 px-2 py-1.5 rounded focus:outline-none focus:border-[#008FD4] text-xs disabled:opacity-50"
         >
           <option value="none">None</option>
           <option value="\r">CR (\r)</option>
@@ -304,19 +334,19 @@ export default function Serial() {
           <option value="\r\n">CRLF (\r\n)</option>
         </select>
 
-        <label className="flex items-center space-x-2 text-sm text-gray-300">
+        <label className="flex items-center space-x-1.5 text-xs text-gray-300 cursor-pointer hover:text-white">
           <input
             type="checkbox"
             checked={isHex}
             onChange={(e) => setIsHex(e.target.checked)}
-            className="rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-600"
+            className="rounded bg-gray-800 border-gray-700 accent-[#008FD4]"
           />
           <span>HEX</span>
         </label>
         <button
           onClick={handleSend}
           disabled={!isOpen}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-1.5 rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-[#008FD4] hover:bg-[#FFCC00] hover:text-black active:bg-[#E5B800] text-white px-6 py-1.5 rounded text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
         >
           Send
         </button>
@@ -324,3 +354,108 @@ export default function Serial() {
     </div>
   );
 }
+
+export default function Serial() {
+  const [tabs, setTabs] = useState<TabItem[]>([
+    { id: "ser_1", portName: "", baudRate: "9600", isOpen: false }
+  ]);
+  const [activeTabId, setActiveTabId] = useState<string>("ser_1");
+
+  const handleAddTab = () => {
+    const newId = `ser_${Date.now()}`;
+    const newTab: TabItem = {
+      id: newId,
+      portName: "",
+      baudRate: "9600",
+      isOpen: false
+    };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(newId);
+  };
+
+  const handleCloseTab = (idToClose: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (tabs.length === 1) {
+      const newId = `ser_${Date.now()}`;
+      setTabs([{ id: newId, portName: "", baudRate: "9600", isOpen: false }]);
+      setActiveTabId(newId);
+      return;
+    }
+
+    const remaining = tabs.filter(t => t.id !== idToClose);
+    setTabs(remaining);
+
+    if (activeTabId === idToClose) {
+      setActiveTabId(remaining[remaining.length - 1].id);
+    }
+  };
+
+  const handleUpdateStatus = (id: string, isOpen: boolean, portName: string, baudRate: string) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isOpen, portName, baudRate } : t))
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-950 text-gray-100">
+      {/* Top Instance Tab Bar */}
+      <div className="bg-gray-900/90 border-b border-gray-800 px-4 pt-2.5 flex items-center gap-1.5 overflow-x-auto shrink-0">
+        {tabs.map((tab, idx) => {
+          const isActive = tab.id === activeTabId;
+          const label = tab.portName ? `${tab.portName} (${tab.baudRate})` : `Serial ${idx + 1}`;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTabId(tab.id)}
+              className={`px-3.5 py-1.5 rounded-t-md text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer border-t border-x ${
+                isActive
+                  ? "bg-[#008FD4] text-white border-[#008FD4] shadow"
+                  : "bg-gray-950 text-gray-400 border-gray-800 hover:bg-[#FFCC00] hover:text-black hover:border-gray-700"
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  tab.isOpen ? "bg-green-400 shadow-sm" : "bg-gray-500"
+                }`}
+              />
+              <span>{label}</span>
+              <span
+                onClick={(e) => handleCloseTab(tab.id, e)}
+                title="Close Tab"
+                className={`ml-1 rounded px-1 text-[11px] font-bold ${
+                  isActive
+                    ? "hover:bg-red-600 text-white/80 hover:text-white"
+                    : "hover:bg-red-600 hover:text-white"
+                }`}
+              >
+                ✕
+              </span>
+            </button>
+          );
+        })}
+
+        <button
+          onClick={handleAddTab}
+          title="Add New Serial Port"
+          className="bg-gray-800 hover:bg-[#FFCC00] hover:text-black text-gray-200 px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 border border-gray-700 ml-1 shadow-sm"
+        >
+          <span>+</span>
+          <span className="hidden sm:inline text-[11px]">New</span>
+        </button>
+      </div>
+
+      {/* Instances Containers */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {tabs.map((tab) => (
+          <SerialInstance
+            key={tab.id}
+            id={tab.id}
+            isVisible={tab.id === activeTabId}
+            onUpdateStatus={handleUpdateStatus}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+

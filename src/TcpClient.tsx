@@ -8,7 +8,22 @@ interface ClientEvent {
   data: string;
 }
 
-export default function TcpClient() {
+interface TabItem {
+  id: string;
+  host: string;
+  port: string;
+  isConnected: boolean;
+}
+
+function TcpClientInstance({
+  id,
+  isVisible,
+  onUpdateStatus,
+}: {
+  id: string;
+  isVisible: boolean;
+  onUpdateStatus: (id: string, isConnected: boolean, host: string, port: string) => void;
+}) {
   const [host, setHost] = useState("127.0.0.1");
   const [port, setPort] = useState("23");
   const [isConnected, setIsConnected] = useState(false);
@@ -32,6 +47,10 @@ export default function TcpClient() {
     showHexRef.current = showHexReceived;
     showVerboseRef.current = showVerboseCrLf;
   }, [showHexReceived, showVerboseCrLf]);
+
+  useEffect(() => {
+    onUpdateStatus(id, isConnected, host, port);
+  }, [id, isConnected, host, port]);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
@@ -78,6 +97,15 @@ export default function TcpClient() {
   useEffect(() => {
     if (sentDataRef.current) sentDataRef.current.scrollTop = sentDataRef.current.scrollHeight;
   }, [sentData]);
+
+  // Cleanup on unmount if connected
+  useEffect(() => {
+    return () => {
+      if (isConnected && clientId) {
+        invoke("disconnect_tcp_client", { id: clientId }).catch(console.error);
+      }
+    };
+  }, [isConnected, clientId]);
 
   const toggleConnection = async () => {
     try {
@@ -138,9 +166,9 @@ export default function TcpClient() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-100 font-sans p-4">
+    <div className={`flex-col flex-1 h-full p-4 overflow-hidden ${isVisible ? "flex" : "hidden"}`}>
       {/* Header controls */}
-      <div className="flex items-center space-x-4 mb-4 bg-gray-800 p-3 rounded border border-gray-700">
+      <div className="flex items-center space-x-4 mb-4 bg-gray-900 p-3 rounded-lg border border-gray-800 shrink-0">
         <div>
           <label className="text-xs text-gray-400 block mb-1">Host / IP</label>
           <input
@@ -149,7 +177,7 @@ export default function TcpClient() {
             onChange={(e) => setHost(e.target.value)}
             disabled={isConnected}
             placeholder="127.0.0.1"
-            className="bg-gray-700 border border-gray-600 text-white px-3 py-1.5 rounded focus:outline-none focus:border-purple-500 w-40 text-sm"
+            className="bg-gray-800 border border-gray-700 text-white px-3 py-1.5 rounded focus:outline-none focus:border-[#008FD4] w-40 text-sm"
           />
         </div>
         
@@ -160,16 +188,18 @@ export default function TcpClient() {
             value={port}
             onChange={(e) => setPort(e.target.value)}
             disabled={isConnected}
-            placeholder="3629"
-            className="bg-gray-700 border border-gray-600 text-white px-3 py-1.5 rounded focus:outline-none focus:border-purple-500 w-24 text-sm"
+            placeholder="23"
+            className="bg-gray-800 border border-gray-700 text-white px-3 py-1.5 rounded focus:outline-none focus:border-[#008FD4] w-24 text-sm"
           />
         </div>
 
         <div className="ml-auto flex items-end mt-4">
           <button
             onClick={toggleConnection}
-            className={`px-6 py-1.5 rounded font-medium transition-colors ${
-              isConnected ? "bg-red-600 hover:bg-red-700 text-white" : "bg-purple-600 hover:bg-purple-700 text-white"
+            className={`px-6 py-1.5 rounded text-sm font-semibold transition-colors cursor-pointer ${
+              isConnected
+                ? "bg-red-600 hover:bg-red-700 text-white shadow-md"
+                : "bg-[#008FD4] hover:bg-[#FFCC00] hover:text-black active:bg-[#E5B800] text-white shadow-md"
             }`}
           >
             {isConnected ? "Disconnect" : "Connect"}
@@ -177,21 +207,21 @@ export default function TcpClient() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-rows-2 gap-4">
+      <div className="flex-1 grid grid-rows-2 gap-4 min-h-0">
         {/* Received Data */}
-        <div className="flex flex-col border border-gray-700 rounded bg-gray-800/50">
-          <div className="bg-gray-800 px-3 py-1 text-sm font-semibold border-b border-gray-700 rounded-t flex justify-between items-center">
+        <div className="flex flex-col border border-gray-800 rounded-lg bg-gray-900/60 overflow-hidden">
+          <div className="bg-gray-900 px-3 py-1.5 text-xs font-semibold border-b border-gray-800 flex justify-between items-center text-gray-200 shrink-0">
             <span>Received Data (Raw TCP)</span>
             <div className="flex space-x-4 items-center">
-              <label className="flex items-center space-x-1 text-xs text-gray-300 font-normal cursor-pointer">
-                <input type="checkbox" checked={showHexReceived} onChange={(e) => setShowHexReceived(e.target.checked)} className="rounded bg-gray-700 border-gray-600" />
+              <label className="flex items-center space-x-1.5 text-xs text-gray-300 font-normal cursor-pointer hover:text-white">
+                <input type="checkbox" checked={showHexReceived} onChange={(e) => setShowHexReceived(e.target.checked)} className="rounded bg-gray-800 border-gray-700 accent-[#008FD4]" />
                 <span>HEX</span>
               </label>
-              <label className="flex items-center space-x-1 text-xs text-gray-300 font-normal cursor-pointer">
-                <input type="checkbox" checked={showVerboseCrLf} onChange={(e) => setShowVerboseCrLf(e.target.checked)} className="rounded bg-gray-700 border-gray-600" />
+              <label className="flex items-center space-x-1.5 text-xs text-gray-300 font-normal cursor-pointer hover:text-white">
+                <input type="checkbox" checked={showVerboseCrLf} onChange={(e) => setShowVerboseCrLf(e.target.checked)} className="rounded bg-gray-800 border-gray-700 accent-[#008FD4]" />
                 <span>Verbose CRLF</span>
               </label>
-              <button onClick={() => setReceivedData("")} className="text-xs text-gray-400 hover:text-white">Clear</button>
+              <button onClick={() => setReceivedData("")} className="text-xs text-gray-400 hover:text-[#FFCC00] cursor-pointer">Clear</button>
             </div>
           </div>
           <textarea
@@ -203,10 +233,10 @@ export default function TcpClient() {
         </div>
 
         {/* Sent Data */}
-        <div className="flex flex-col border border-gray-700 rounded bg-gray-800/50">
-          <div className="bg-gray-800 px-3 py-1 text-sm font-semibold border-b border-gray-700 rounded-t flex justify-between">
+        <div className="flex flex-col border border-gray-800 rounded-lg bg-gray-900/60 overflow-hidden">
+          <div className="bg-gray-900 px-3 py-1.5 text-xs font-semibold border-b border-gray-800 flex justify-between items-center text-gray-200 shrink-0">
             <span>Sent Data / Logs</span>
-            <button onClick={() => setSentData("")} className="text-xs text-gray-400 hover:text-white">Clear</button>
+            <button onClick={() => setSentData("")} className="text-xs text-gray-400 hover:text-[#FFCC00] cursor-pointer">Clear</button>
           </div>
           <textarea
             ref={sentDataRef}
@@ -218,7 +248,7 @@ export default function TcpClient() {
       </div>
 
       {/* Send Controls */}
-      <div className="mt-4 flex items-center space-x-3 bg-gray-800 p-3 rounded border border-gray-700">
+      <div className="mt-4 flex items-center space-x-3 bg-gray-900 p-3 rounded-lg border border-gray-800 shrink-0">
         <input
           type="text"
           value={inputMessage}
@@ -226,14 +256,14 @@ export default function TcpClient() {
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
           disabled={!isConnected}
           placeholder="Type a message..."
-          className="flex-1 bg-transparent text-white focus:outline-none placeholder-gray-500 font-mono disabled:opacity-50"
+          className="flex-1 bg-transparent text-white focus:outline-none placeholder-gray-500 font-mono text-sm disabled:opacity-50"
         />
         
         <select
           value={lineEnding}
           onChange={(e) => setLineEnding(e.target.value as any)}
           disabled={!isConnected || isHex}
-          className="bg-gray-700 border border-gray-600 text-gray-300 px-2 py-1.5 rounded focus:outline-none focus:border-purple-500 text-sm disabled:opacity-50"
+          className="bg-gray-800 border border-gray-700 text-gray-300 px-2 py-1.5 rounded focus:outline-none focus:border-[#008FD4] text-xs disabled:opacity-50"
         >
           <option value="none">None</option>
           <option value="\r">CR (\r)</option>
@@ -241,19 +271,19 @@ export default function TcpClient() {
           <option value="\r\n">CRLF (\r\n)</option>
         </select>
 
-        <label className="flex items-center space-x-2 text-sm text-gray-300">
+        <label className="flex items-center space-x-1.5 text-xs text-gray-300 cursor-pointer hover:text-white">
           <input
             type="checkbox"
             checked={isHex}
             onChange={(e) => setIsHex(e.target.checked)}
-            className="rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-600"
+            className="rounded bg-gray-800 border-gray-700 accent-[#008FD4]"
           />
           <span>HEX</span>
         </label>
         <button
           onClick={handleSend}
           disabled={!isConnected}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-1.5 rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-[#008FD4] hover:bg-[#FFCC00] hover:text-black active:bg-[#E5B800] text-white px-6 py-1.5 rounded text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
         >
           Send
         </button>
@@ -261,3 +291,108 @@ export default function TcpClient() {
     </div>
   );
 }
+
+export default function TcpClient() {
+  const [tabs, setTabs] = useState<TabItem[]>([
+    { id: "cli_1", host: "127.0.0.1", port: "23", isConnected: false }
+  ]);
+  const [activeTabId, setActiveTabId] = useState<string>("cli_1");
+
+  const handleAddTab = () => {
+    const newId = `cli_${Date.now()}`;
+    const newTab: TabItem = {
+      id: newId,
+      host: "127.0.0.1",
+      port: "23",
+      isConnected: false
+    };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(newId);
+  };
+
+  const handleCloseTab = (idToClose: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (tabs.length === 1) {
+      const newId = `cli_${Date.now()}`;
+      setTabs([{ id: newId, host: "127.0.0.1", port: "23", isConnected: false }]);
+      setActiveTabId(newId);
+      return;
+    }
+
+    const remaining = tabs.filter(t => t.id !== idToClose);
+    setTabs(remaining);
+
+    if (activeTabId === idToClose) {
+      setActiveTabId(remaining[remaining.length - 1].id);
+    }
+  };
+
+  const handleUpdateStatus = (id: string, isConnected: boolean, host: string, port: string) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isConnected, host, port } : t))
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-950 text-gray-100">
+      {/* Top Instance Tab Bar */}
+      <div className="bg-gray-900/90 border-b border-gray-800 px-4 pt-2.5 flex items-center gap-1.5 overflow-x-auto shrink-0">
+        {tabs.map((tab, idx) => {
+          const isActive = tab.id === activeTabId;
+          const label = tab.host && tab.port ? `${tab.host}:${tab.port}` : `Client ${idx + 1}`;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTabId(tab.id)}
+              className={`px-3.5 py-1.5 rounded-t-md text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer border-t border-x ${
+                isActive
+                  ? "bg-[#008FD4] text-white border-[#008FD4] shadow"
+                  : "bg-gray-950 text-gray-400 border-gray-800 hover:bg-[#FFCC00] hover:text-black hover:border-gray-700"
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  tab.isConnected ? "bg-green-400 shadow-sm" : "bg-gray-500"
+                }`}
+              />
+              <span>{label}</span>
+              <span
+                onClick={(e) => handleCloseTab(tab.id, e)}
+                title="Close Tab"
+                className={`ml-1 rounded px-1 text-[11px] font-bold ${
+                  isActive
+                    ? "hover:bg-red-600 text-white/80 hover:text-white"
+                    : "hover:bg-red-600 hover:text-white"
+                }`}
+              >
+                ✕
+              </span>
+            </button>
+          );
+        })}
+
+        <button
+          onClick={handleAddTab}
+          title="Add New Raw TCP Client"
+          className="bg-gray-800 hover:bg-[#FFCC00] hover:text-black text-gray-200 px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 border border-gray-700 ml-1 shadow-sm"
+        >
+          <span>+</span>
+          <span className="hidden sm:inline text-[11px]">New</span>
+        </button>
+      </div>
+
+      {/* Instances Containers */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {tabs.map((tab) => (
+          <TcpClientInstance
+            key={tab.id}
+            id={tab.id}
+            isVisible={tab.id === activeTabId}
+            onUpdateStatus={handleUpdateStatus}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
