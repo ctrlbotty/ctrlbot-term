@@ -1,14 +1,14 @@
-# CTRLbot Term
+# CTRLbot Terminator
 
-**CTRLbot Term** is a modern, lightweight, and blazing-fast terminal and networking suite built specifically for testing IoT devices, raw socket communication, and serial interfaces. 
+**CTRLbot Terminator** is a modern, lightweight, and blazing-fast terminal and networking suite built specifically for testing IoT devices, raw socket communication, and serial interfaces. 
 
-Developed as a modern alternative to legacy tools like PuTTY and Hercules, CTRLbot Term is powered by a **Rust** backend (via [Tauri](https://tauri.app/)) for native OS-level hardware access, and a **React + Tailwind CSS** frontend for a beautiful, responsive user interface.
+Developed as a modern alternative to legacy tools like PuTTY and Hercules, CTRLbot Terminator is powered by a **Rust** backend (via [Tauri](https://tauri.app/)) for native OS-level hardware access, and a **React + Tailwind CSS** frontend for a beautiful, responsive user interface.
 
-![CTRLbot Term Screenshot](src-tauri/icons/128x128.png) <!-- Note: Replace with actual UI screenshot if desired -->
+![CTRLbot Terminator Screenshot](src-tauri/icons/128x128.png) <!-- Note: Replace with actual UI screenshot if desired -->
 
 ## Features
 
-CTRLbot Term combines the most critical networking and hardware diagnostic tools into one unified application:
+CTRLbot Terminator combines the most critical networking and hardware diagnostic tools into one unified application:
 
 ### 1. TCP Server
 - Spin up a local TCP server on any port instantly.
@@ -32,9 +32,18 @@ CTRLbot Term combines the most critical networking and hardware diagnostic tools
 - Authenticate and connect to remote devices via SSH (Port 22).
 - True terminal-emulation rendering (powered by `libssh2`) to interact with remote shells safely and securely.
 
+### 5. Scan (Windows)
+- Select a connected network port (Ethernet, Wi-Fi, or a virtual adapter); its IPv4 subnet is detected automatically.
+- Active ARP discovery finds local devices even when they block ping or have no web service. Ping and TCP probes provide fallbacks.
+- Separate Host Name, Device Name, and Manufacturer columns use mDNS hostname/service/TXT discovery, reverse mDNS PTR, SSDP/UPnP descriptions, NetBIOS, and Windows name resolution. Useful HTTP page titles are a lower-priority device-name fallback; generic titles and opaque application service IDs are not used as names.
+- Manufacturer uses explicit UPnP/mDNS data where provided and the bundled IEEE MAC registry otherwise. Locally administered/randomized MACs are not assigned a guessed vendor. Hover over values to inspect their source and MAC vendor. Missing data stays blank.
+- MAC lookup works offline using MA-L, MA-M, MA-S, and IAB assignments. Run `./scripts/update-mac-vendors.ps1` before rebuilding to refresh the public IEEE data; no device MACs are sent to a lookup service.
+- Results include links for open TCP ports 80, 443, 8080, and 8443 using their conventional HTTP/HTTPS schemes. Results stay available when switching tabs and can be filtered by names, manufacturer, IP, or MAC. Stop retains partial results.
+- Scans cover the selected adapter's entire IPv4 subnet, supporting /16 through /32. Larger networks are explicitly refused rather than silently truncated. IPv6 and driver matching are not included.
+
 ## Development Setup
 
-To run or build CTRLbot Term from source, you will need **Node.js** and **Rust** installed on your machine. 
+To run or build CTRLbot Terminator from source, you will need **Node.js** and **Rust** installed on your machine. 
 
 ### Prerequisites (Windows)
 1. Install [Node.js](https://nodejs.org/)

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+mod scan;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -434,10 +435,184 @@ async fn send_ssh_message(id: String, message: Vec<u8>, state: tauri::State<'_, 
     }
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct NetworkAdapter {
+    pub name: String,
+    pub ipv4: Option<String>,
+    pub ipv6: Option<String>,
+    pub subnet_mask: Option<String>,
+    pub default_gateway: Option<String>,
+    pub dns_suffix: Option<String>,
+    pub media_state: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct NetworkInfo {
+    pub primary_ip: String,
+    pub is_online: bool,
+    pub raw_ipconfig: String,
+    pub adapters: Vec<NetworkAdapter>,
+    pub active_adapter: Option<NetworkAdapter>,
+}
+
+fn get_primary_ip_via_udp() -> Option<String> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").or_else(|_| socket.connect("1.1.1.1:80")).ok()?;
+    let local_ip = socket.local_addr().ok()?.ip();
+    if !local_ip.is_loopback() && !local_ip.is_unspecified() {
+        Some(local_ip.to_string())
+    } else {
+        None
+    }
+}
+
+fn run_ipconfig_cmd() -> String {
+    let mut cmd = std::process::Command::new("ipconfig");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    match cmd.output() {
+        Ok(output) => String::from_utf8_lossy(&output.stdout).to_string(),
+        Err(e) => format!("Failed to execute ipconfig: {}", e),
+    }
+}
+
+fn parse_ipconfig_output(raw: &str) -> Vec<NetworkAdapter> {
+    let mut adapters = Vec::new();
+    let mut current_adapter: Option<NetworkAdapter> = None;
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Adapter headers in ipconfig typically look like: "Ethernet adapter Ethernet 3:" or "Wireless LAN adapter Wi-Fi 2:"
+        if (line.starts_with("Ethernet adapter") 
+            || line.starts_with("Wireless LAN adapter") 
+            || (line.ends_with(':') && !line.contains(". ."))) 
+            && !line.contains(". .") 
+            && !trimmed.starts_with("Windows IP Configuration") 
+        {
+            if let Some(adapter) = current_adapter.take() {
+                adapters.push(adapter);
+            }
+            let name = trimmed.trim_end_matches(':').to_string();
+            current_adapter = Some(NetworkAdapter {
+                name,
+                ipv4: None,
+                ipv6: None,
+                subnet_mask: None,
+                default_gateway: None,
+                dns_suffix: None,
+                media_state: None,
+            });
+            continue;
+        }
+
+        if let Some(ref mut adapter) = current_adapter {
+            if let Some(idx) = trimmed.find(':') {
+                let key_part = trimmed[..idx].trim_matches(|c| c == '.' || c == ' ').to_lowercase();
+                let val_part = trimmed[idx + 1..].trim().to_string();
+
+                if !val_part.is_empty() {
+                    if key_part.contains("ipv4") || key_part == "ip address" {
+                        let ip = val_part.split('(').next().unwrap_or(&val_part).trim().to_string();
+                        adapter.ipv4 = Some(ip);
+                    } else if key_part.contains("ipv6") {
+                        let ip = val_part.split('(').next().unwrap_or(&val_part).trim().to_string();
+                        adapter.ipv6 = Some(ip);
+                    } else if key_part.contains("subnet mask") {
+                        adapter.subnet_mask = Some(val_part);
+                    } else if key_part.contains("default gateway") {
+                        adapter.default_gateway = Some(val_part);
+                    } else if key_part.contains("dns suffix") {
+                        adapter.dns_suffix = Some(val_part);
+                    } else if key_part.contains("media state") {
+                        adapter.media_state = Some(val_part);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(adapter) = current_adapter {
+        adapters.push(adapter);
+    }
+
+    adapters
+}
+
+#[tauri::command]
+async fn get_network_info() -> Result<NetworkInfo, String> {
+    let raw_ipconfig = run_ipconfig_cmd();
+    let adapters = parse_ipconfig_output(&raw_ipconfig);
+
+    let udp_ip = get_primary_ip_via_udp();
+
+    // Determine active adapter & primary IP
+    let mut active_adapter = None;
+    let mut primary_ip = String::new();
+
+    if let Some(ref ip) = udp_ip {
+        primary_ip = ip.clone();
+        for adapter in &adapters {
+            if adapter.ipv4.as_deref() == Some(ip.as_str()) {
+                active_adapter = Some(adapter.clone());
+                break;
+            }
+        }
+    }
+
+    if active_adapter.is_none() {
+        // Fallback: look for adapter with default gateway and IPv4
+        for adapter in &adapters {
+            if adapter.ipv4.is_some() && adapter.default_gateway.is_some() {
+                active_adapter = Some(adapter.clone());
+                if primary_ip.is_empty() {
+                    primary_ip = adapter.ipv4.clone().unwrap();
+                }
+                break;
+            }
+        }
+    }
+
+    if active_adapter.is_none() {
+        // Fallback: any adapter with IPv4
+        for adapter in &adapters {
+            if let Some(ref ip) = adapter.ipv4 {
+                active_adapter = Some(adapter.clone());
+                if primary_ip.is_empty() {
+                    primary_ip = ip.clone();
+                }
+                break;
+            }
+        }
+    }
+
+    if primary_ip.is_empty() {
+        primary_ip = "Offline".to_string();
+    }
+
+    let is_online = primary_ip != "Offline" && primary_ip != "127.0.0.1" && primary_ip != "0.0.0.0";
+
+    Ok(NetworkInfo {
+        primary_ip,
+        is_online,
+        raw_ipconfig,
+        adapters,
+        active_adapter,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(scan::ScanState::default())
         .manage(AppState {
             servers: Arc::new(Mutex::new(HashMap::new())),
             broadcasts: Arc::new(Mutex::new(HashMap::new())),
@@ -449,8 +624,54 @@ pub fn run() {
             start_tcp_server, stop_tcp_server, send_tcp_message,
             list_serial_ports, open_serial_port, close_serial_port, send_serial_message,
             connect_tcp_client, disconnect_tcp_client, send_tcp_client_message,
-            connect_ssh, disconnect_ssh, send_ssh_message
+            connect_ssh, disconnect_ssh, send_ssh_message,
+            get_network_info,
+            scan::list_scan_adapters, scan::start_scan, scan::stop_scan, scan::get_scan_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_ipconfig() {
+        let sample = r#"
+Windows IP Configuration
+
+Ethernet adapter Ethernet 3:
+
+   Connection-specific DNS Suffix  . : localdomain
+   Link-local IPv6 Address . . . . . : fe80::3f64:b60d:3498:f960%25
+   IPv4 Address. . . . . . . . . . . : 192.168.56.1
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Default Gateway . . . . . . . . . : 
+
+Wireless LAN adapter Wi-Fi 2:
+
+   Connection-specific DNS Suffix  . : 
+   Link-local IPv6 Address . . . . . : fe80::10ad:9c0:c5b9:bd9c%24
+   IPv4 Address. . . . . . . . . . . : 192.168.0.109
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Default Gateway . . . . . . . . . : 192.168.0.1
+
+Ethernet adapter Bluetooth Network Connection 2:
+
+   Media State . . . . . . . . . . . : Media disconnected
+   Connection-specific DNS Suffix  . : 
+"#;
+        let adapters = parse_ipconfig_output(sample);
+        assert_eq!(adapters.len(), 3);
+        assert_eq!(adapters[0].name, "Ethernet adapter Ethernet 3");
+        assert_eq!(adapters[0].ipv4.as_deref(), Some("192.168.56.1"));
+        assert_eq!(adapters[1].name, "Wireless LAN adapter Wi-Fi 2");
+        assert_eq!(adapters[1].ipv4.as_deref(), Some("192.168.0.109"));
+        assert_eq!(adapters[1].default_gateway.as_deref(), Some("192.168.0.1"));
+        assert_eq!(adapters[1].subnet_mask.as_deref(), Some("255.255.255.0"));
+        assert_eq!(adapters[2].media_state.as_deref(), Some("Media disconnected"));
+    }
+}
+
+

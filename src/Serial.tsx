@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { PinIcon, loadSavedTabs, savePinnedTabs, truncateTerminalBuffer } from "./storage";
 
 interface SerialEvent {
   port_name: string;
@@ -8,38 +9,54 @@ interface SerialEvent {
   data: number[];
 }
 
-interface TabItem {
+export interface SerialTabItem {
   id: string;
+  name?: string;
   portName: string;
   baudRate: string;
   isOpen: boolean;
+  isPinned: boolean;
+  dataBits?: string;
+  parity?: string;
+  flowControl?: string;
+  lineEnding?: "none" | "\\r" | "\\n" | "\\r\\n";
+  isHex?: boolean;
+  showHexReceived?: boolean;
+  showVerboseCrLf?: boolean;
+  receivedData?: string;
+  sentData?: string;
+  inputMessage?: string;
 }
+
+const STORAGE_KEY = "ctrlbot_pinned_serial_tabs";
 
 function SerialInstance({
   id,
+  initialData,
   isVisible,
-  onUpdateStatus,
+  onUpdateState,
 }: {
   id: string;
+  initialData?: Partial<SerialTabItem>;
   isVisible: boolean;
-  onUpdateStatus: (id: string, isOpen: boolean, portName: string, baudRate: string) => void;
+  onUpdateState: (id: string, updates: Partial<SerialTabItem>) => void;
 }) {
   const [ports, setPorts] = useState<string[]>([]);
-  const [selectedPort, setSelectedPort] = useState("");
-  const [baudRate, setBaudRate] = useState("9600");
+  const [selectedPort, setSelectedPort] = useState(initialData?.portName || "");
+  const [baudRate, setBaudRate] = useState(initialData?.baudRate || "9600");
   const [isOpen, setIsOpen] = useState(false);
   
-  const [receivedData, setReceivedData] = useState<string>("");
-  const [sentData, setSentData] = useState<string>("");
-  const [inputMessage, setInputMessage] = useState("");
-  const [isHex, setIsHex] = useState(false);
-  const [showHexReceived, setShowHexReceived] = useState(false);
-  const [showVerboseCrLf, setShowVerboseCrLf] = useState(true);
-  const [lineEnding, setLineEnding] = useState<"none" | "\\r" | "\\n" | "\\r\\n">("\\r\\n");
+  const [receivedData, setReceivedData] = useState<string>(initialData?.receivedData || "");
+  const [sentData, setSentData] = useState<string>(initialData?.sentData || "");
+  const [inputMessage, setInputMessage] = useState(initialData?.inputMessage || "");
+  const [isHex, setIsHex] = useState(initialData?.isHex ?? false);
+  const [showHexReceived, setShowHexReceived] = useState(initialData?.showHexReceived ?? false);
+  const [showVerboseCrLf, setShowVerboseCrLf] = useState(initialData?.showVerboseCrLf ?? true);
+  const [lineEnding, setLineEnding] = useState<"none" | "\\r" | "\\n" | "\\r\\n">(initialData?.lineEnding || "\\r\\n");
 
-  const [dataBits, setDataBits] = useState("8");
-  const [parity, setParity] = useState("none");
-  const [flowControl, setFlowControl] = useState("none");
+  const [dataBits, setDataBits] = useState(initialData?.dataBits || "8");
+  const [parity, setParity] = useState(initialData?.parity || "none");
+  const [flowControl, setFlowControl] = useState(initialData?.flowControl || "none");
 
   const receivedDataRef = useRef<HTMLTextAreaElement>(null);
   const sentDataRef = useRef<HTMLTextAreaElement>(null);
@@ -53,8 +70,22 @@ function SerialInstance({
   }, [showHexReceived, showVerboseCrLf]);
 
   useEffect(() => {
-    onUpdateStatus(id, isOpen, selectedPort, baudRate);
-  }, [id, isOpen, selectedPort, baudRate]);
+    onUpdateState(id, {
+      portName: selectedPort,
+      baudRate,
+      isOpen,
+      dataBits,
+      parity,
+      flowControl,
+      lineEnding,
+      isHex,
+      showHexReceived,
+      showVerboseCrLf,
+      receivedData,
+      sentData,
+      inputMessage,
+    });
+  }, [id, isOpen, selectedPort, baudRate, dataBits, parity, flowControl, lineEnding, isHex, showHexReceived, showVerboseCrLf, receivedData, sentData, inputMessage]);
 
   const fetchPorts = async () => {
     try {
@@ -196,8 +227,11 @@ function SerialInstance({
               {ports.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
+              {selectedPort && !ports.includes(selectedPort) && (
+                <option value={selectedPort}>{selectedPort} (disconnected)</option>
+              )}
             </select>
-            <button onClick={fetchPorts} disabled={isOpen} className="bg-gray-800 hover:bg-[#FFCC00] hover:text-black px-2.5 py-1 rounded text-xs border border-gray-700 transition-colors cursor-pointer">↻</button>
+            <button onClick={fetchPorts} disabled={isOpen} title="Refresh ports" className="bg-gray-800 hover:bg-[#FFCC00] hover:text-black px-2.5 py-1 rounded text-xs border border-gray-700 transition-colors cursor-pointer">↻</button>
           </div>
         </div>
         
@@ -356,18 +390,60 @@ function SerialInstance({
 }
 
 export default function Serial() {
-  const [tabs, setTabs] = useState<TabItem[]>([
-    { id: "ser_1", portName: "", baudRate: "9600", isOpen: false }
-  ]);
-  const [activeTabId, setActiveTabId] = useState<string>("ser_1");
+  const [tabs, setTabs] = useState<SerialTabItem[]>(() => {
+    return loadSavedTabs<SerialTabItem>(STORAGE_KEY, [
+      { id: "ser_1", portName: "", baudRate: "9600", isOpen: false, isPinned: false },
+    ]);
+  });
+
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    return tabs[0]?.id || "ser_1";
+  });
+
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>("");
+
+  // Persist pinned tabs whenever tabs state changes
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      savePinnedTabs(
+        STORAGE_KEY,
+        tabs.map((t) => ({
+          ...t,
+          isOpen: false,
+          receivedData: truncateTerminalBuffer(t.receivedData),
+          sentData: truncateTerminalBuffer(t.sentData),
+        }))
+      );
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [tabs]);
+
+  // Ensure immediate save before unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      savePinnedTabs(
+        STORAGE_KEY,
+        tabs.map((t) => ({
+          ...t,
+          isOpen: false,
+          receivedData: truncateTerminalBuffer(t.receivedData),
+          sentData: truncateTerminalBuffer(t.sentData),
+        }))
+      );
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [tabs]);
 
   const handleAddTab = () => {
     const newId = `ser_${Date.now()}`;
-    const newTab: TabItem = {
+    const newTab: SerialTabItem = {
       id: newId,
       portName: "",
       baudRate: "9600",
-      isOpen: false
+      isOpen: false,
+      isPinned: false,
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newId);
@@ -377,12 +453,13 @@ export default function Serial() {
     e.stopPropagation();
     if (tabs.length === 1) {
       const newId = `ser_${Date.now()}`;
-      setTabs([{ id: newId, portName: "", baudRate: "9600", isOpen: false }]);
+      const freshTab: SerialTabItem = { id: newId, portName: "", baudRate: "9600", isOpen: false, isPinned: false };
+      setTabs([freshTab]);
       setActiveTabId(newId);
       return;
     }
 
-    const remaining = tabs.filter(t => t.id !== idToClose);
+    const remaining = tabs.filter((t) => t.id !== idToClose);
     setTabs(remaining);
 
     if (activeTabId === idToClose) {
@@ -390,10 +467,30 @@ export default function Serial() {
     }
   };
 
-  const handleUpdateStatus = (id: string, isOpen: boolean, portName: string, baudRate: string) => {
+  const handleTogglePin = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setTabs((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, isOpen, portName, baudRate } : t))
+      prev.map((t) => (t.id === id ? { ...t, isPinned: !t.isPinned } : t))
     );
+  };
+
+  const handleUpdateState = useCallback((id: string, updates: Partial<SerialTabItem>) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+    );
+  }, []);
+
+  const handleStartRename = (tab: SerialTabItem, defaultLabel: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTabId(tab.id);
+    setEditingName(tab.name || defaultLabel);
+  };
+
+  const handleFinishRename = (id: string) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, name: editingName.trim() } : t))
+    );
+    setEditingTabId(null);
   };
 
   return (
@@ -402,7 +499,9 @@ export default function Serial() {
       <div className="bg-gray-900/90 border-b border-gray-800 px-4 pt-2.5 flex items-center gap-1.5 overflow-x-auto shrink-0">
         {tabs.map((tab, idx) => {
           const isActive = tab.id === activeTabId;
-          const label = tab.portName ? `${tab.portName} (${tab.baudRate})` : `Serial ${idx + 1}`;
+          const defaultLabel = tab.portName ? `${tab.portName} (${tab.baudRate})` : `Serial ${idx + 1}`;
+          const displayLabel = tab.name || defaultLabel;
+
           return (
             <button
               key={tab.id}
@@ -414,15 +513,55 @@ export default function Serial() {
               }`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${
+                className={`w-2 h-2 rounded-full shrink-0 ${
                   tab.isOpen ? "bg-green-400 shadow-sm" : "bg-gray-500"
                 }`}
               />
-              <span>{label}</span>
+
+              {editingTabId === tab.id ? (
+                <input
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onBlur={() => handleFinishRename(tab.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleFinishRename(tab.id);
+                    if (e.key === "Escape") setEditingTabId(null);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                  className="bg-gray-800 text-white border border-gray-600 px-1 py-0.5 rounded text-xs w-28 outline-none"
+                />
+              ) : (
+                <span
+                  onDoubleClick={(e) => handleStartRename(tab, defaultLabel, e)}
+                  title="Double click to rename tab"
+                  className="truncate max-w-[140px]"
+                >
+                  {displayLabel}
+                </span>
+              )}
+
+              {/* Pin Icon Toggle */}
+              <span
+                onClick={(e) => handleTogglePin(tab.id, e)}
+                title={tab.isPinned ? "Unpin preset (won't save across restarts)" : "Pin as preset (keep data & settings across restarts)"}
+                className={`p-0.5 rounded transition-colors cursor-pointer ${
+                  tab.isPinned
+                    ? "text-[#FFCC00] hover:text-yellow-300 scale-110"
+                    : isActive
+                    ? "text-white/60 hover:text-white"
+                    : "text-gray-500 hover:text-[#FFCC00]"
+                }`}
+              >
+                <PinIcon pinned={tab.isPinned} className="w-3.5 h-3.5" />
+              </span>
+
+              {/* Close Button */}
               <span
                 onClick={(e) => handleCloseTab(tab.id, e)}
                 title="Close Tab"
-                className={`ml-1 rounded px-1 text-[11px] font-bold ${
+                className={`rounded px-1 text-[11px] font-bold ${
                   isActive
                     ? "hover:bg-red-600 text-white/80 hover:text-white"
                     : "hover:bg-red-600 hover:text-white"
@@ -450,12 +589,12 @@ export default function Serial() {
           <SerialInstance
             key={tab.id}
             id={tab.id}
+            initialData={tab}
             isVisible={tab.id === activeTabId}
-            onUpdateStatus={handleUpdateStatus}
+            onUpdateState={handleUpdateState}
           />
         ))}
       </div>
     </div>
   );
 }
-
