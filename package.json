@@ -1,14 +1,14 @@
 {
   "name": "ctrlbot-term",
   "private": true,
-  "version": "0.1.1",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "bundle": "tauri build && node -e \"const fs=require('fs'),path=require('path');const src=path.join('src-tauri','target','release','bundle');const dst='installers';fs.mkdirSync(dst,{recursive:true});for(const sub of ['nsis','msi']){const dir=path.join(src,sub);if(fs.existsSync(dir)){for(const f of fs.readdirSync(dir)){if(f.endsWith('.exe')||f.endsWith('.msi')){fs.copyFileSync(path.join(dir,f),path.join(dst,f));console.log('Copied installer to '+dst+'/'+f);}}}}\""
+    "bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/installer-art.ps1 && tauri build && node scripts/collect-installers.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -66,14 +66,18 @@ npm run tauri dev
 ```
 
 ### Building for Production
-To compile the application into a standalone installer (`.exe` and `.msi`):
+To build the Windows x64 Setup installer and portable application:
 
 ```bash
-npm run tauri build
+npm run bundle
 ```
 
-The compiled installers will be located in:
-`src-tauri/target/release/bundle/`
+The `installers/` folder contains clearly named downloads, following CTRLbot Mirror's naming:
+
+- `CTRLbot Terminator-Setup-<version>.exe`: full installation, including shortcuts and uninstaller (recommended).
+- `CTRLbot Terminator-<version>-portable.exe`: run directly without installing the application. Requires the Microsoft Edge WebView2 Runtime to already be installed; settings use the Windows user profile and are shared with the installed app.
+
+The build regenerates CTRLbot-branded setup artwork, collects only the current version, and moves older downloads into `installers/archive/`. `installers/README.txt` explains each download.
 
 ## Tech Stack
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS v4.

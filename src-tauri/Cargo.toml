@@ -1,6 +1,6 @@
 [package]
 name = "ctrlbot-term"
-version = "0.1.1"
+version = "1.0.0"
 description = "CTRLbot Terminator"
 authors = ["you"]
 edition = "2021"
