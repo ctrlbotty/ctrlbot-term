@@ -2,7 +2,7 @@
 name = "ctrlbot-term"
 version = "1.0.0"
 description = "CTRLbot Terminator"
-authors = ["you"]
+authors = ["CTRLbot LLC"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

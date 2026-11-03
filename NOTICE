@@ -1,0 +1,48 @@
+CTRLbot Terminator
+Copyright 2026 CTRLbot LLC
+
+CTRLbot Terminator is released under the MIT License (see LICENSE).
+This product includes software and data developed by third parties. They are
+used unmodified and remain under their own licenses, listed below.
+
+--------------------------------------------------------------------------------
+Tauri: https://github.com/tauri-apps/tauri
+Copyright (c) 2017 - Present Tauri Apps Contributors
+Licensed under the Apache License 2.0 or the MIT License
+
+Provides the desktop shell and native bridge (tauri, tauri-plugin-opener).
+
+--------------------------------------------------------------------------------
+serialport-rs: https://github.com/serialport/serialport-rs
+Licensed under the Mozilla Public License 2.0
+
+Used unmodified from crates.io for the Serial (COM) tab. Its source code is
+available from the link above.
+
+--------------------------------------------------------------------------------
+ssh2-rs: https://github.com/alexcrichton/ssh2-rs
+Licensed under the MIT License or the Apache License 2.0
+
+libssh2: https://libssh2.org
+Licensed under the BSD 3-Clause License
+
+zlib: https://zlib.net
+Licensed under the zlib License
+
+Provide the SSH Client tab. libssh2 and zlib are compiled into the application
+through the libssh2-sys and libz-sys crates.
+
+--------------------------------------------------------------------------------
+IEEE Registration Authority MAC address assignments (MA-L, MA-M, MA-S, IAB)
+https://standards.ieee.org/products-programs/regauth/
+
+Public assignment listings, bundled in src-tauri/data/mac-vendors.tsv for
+offline manufacturer lookup in the Scan tab. Device MAC addresses are never
+sent to a lookup service.
+
+--------------------------------------------------------------------------------
+Other Rust crates, each licensed under the MIT License, the Apache License 2.0,
+or either at your option: tokio, serde, serde_json, reqwest, quick-xml,
+socket2, mdns-sd, windows-sys.
+
+Frontend: React (MIT), Tailwind CSS (MIT), Vite (MIT).

@@ -4,7 +4,16 @@
 
 Developed as a modern alternative to legacy tools like PuTTY and Hercules, CTRLbot Terminator is powered by a **Rust** backend (via [Tauri](https://tauri.app/)) for native OS-level hardware access, and a **React + Tailwind CSS** frontend for a beautiful, responsive user interface.
 
-![CTRLbot Terminator Screenshot](src-tauri/icons/128x128.png) <!-- Note: Replace with actual UI screenshot if desired -->
+![CTRLbot Terminator with the TCP Server tab open](docs/screenshot.webp)
+
+## Download
+
+Get the latest Windows x64 build from [Releases](https://github.com/ctrlbotty/ctrlbot-term/releases/latest):
+
+- `CTRLbot.Terminator-Setup-<version>.exe`: full installation with shortcuts and an uninstaller (recommended).
+- `CTRLbot.Terminator-<version>-portable.exe`: runs without installing. Requires the Microsoft Edge WebView2 Runtime, which Windows 11 includes; the Setup installer adds it when missing.
+
+The builds are not code signed, so Windows SmartScreen may warn on first run. Choose **More info**, then **Run anyway**.
 
 ## Features
 
@@ -55,7 +64,7 @@ Clone the repository and install the frontend dependencies:
 
 ```bash
 git clone https://github.com/ctrlbotty/ctrlbot-term.git
-cd "CTRLbot Term"
+cd ctrlbot-term
 npm install
 ```
 
@@ -72,7 +81,7 @@ To build the Windows x64 Setup installer and portable application:
 npm run bundle
 ```
 
-The `installers/` folder contains clearly named downloads, following CTRLbot Mirror's naming:
+The build writes these to the local `installers/` folder, which is not tracked in Git; published builds are attached to [Releases](https://github.com/ctrlbotty/ctrlbot-term/releases). The names follow CTRLbot Mirror's:
 
 - `CTRLbot Terminator-Setup-<version>.exe`: full installation, including shortcuts and uninstaller (recommended).
 - `CTRLbot Terminator-<version>-portable.exe`: run directly without installing the application. Requires the Microsoft Edge WebView2 Runtime to already be installed; settings use the Windows user profile and are shared with the installed app.
@@ -85,4 +94,4 @@ The build regenerates CTRLbot-branded setup artwork, collects only the current v
 - **Framework:** Tauri v2.
 
 ## License
-MIT License
+MIT License. See [LICENSE](LICENSE). Third-party software and data included in the app are listed in [NOTICE](NOTICE).

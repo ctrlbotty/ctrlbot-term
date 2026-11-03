@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 vs_buildtools.exe
+
+# Release downloads live on GitHub Releases, not in the repository
+installers/
