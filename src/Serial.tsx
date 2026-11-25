@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { PinIcon, loadSavedTabs, savePinnedTabs, truncateTerminalBuffer } from "./storage";
+import { encodeTerminalMessage, formatTerminalBytes, type LineEnding } from "./terminalBytes";
 
 interface SerialEvent {
   port_name: string;
@@ -19,7 +20,7 @@ export interface SerialTabItem {
   dataBits?: string;
   parity?: string;
   flowControl?: string;
-  lineEnding?: "none" | "\\r" | "\\n" | "\\r\\n";
+  lineEnding?: LineEnding;
   isHex?: boolean;
   showHexReceived?: boolean;
   showVerboseCrLf?: boolean;
@@ -52,7 +53,7 @@ function SerialInstance({
   const [isHex, setIsHex] = useState(initialData?.isHex ?? false);
   const [showHexReceived, setShowHexReceived] = useState(initialData?.showHexReceived ?? false);
   const [showVerboseCrLf, setShowVerboseCrLf] = useState(initialData?.showVerboseCrLf ?? true);
-  const [lineEnding, setLineEnding] = useState<"none" | "\\r" | "\\n" | "\\r\\n">(initialData?.lineEnding || "\\r\\n");
+  const [lineEnding, setLineEnding] = useState<LineEnding>(initialData?.lineEnding || "\\r\\n");
 
   const [dataBits, setDataBits] = useState(initialData?.dataBits || "8");
   const [parity, setParity] = useState(initialData?.parity || "none");
@@ -113,17 +114,7 @@ function SerialInstance({
         const { event_type, data } = event.payload;
 
         if (event_type === "data") {
-          let formattedStr = "";
-          if (showHexRef.current) {
-            formattedStr = Array.from(data).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ') + ' ';
-          } else {
-            const text = new TextDecoder().decode(new Uint8Array(data));
-            if (showVerboseRef.current) {
-              formattedStr = text.replace(/\r/g, "<CR>").replace(/\n/g, "<LF>\n");
-            } else {
-              formattedStr = text;
-            }
-          }
+          const formattedStr = formatTerminalBytes(data, showHexRef.current, showVerboseRef.current);
           setReceivedData((prev) => prev + formattedStr);
         }
       });
@@ -184,23 +175,7 @@ function SerialInstance({
     if (!inputMessage && lineEnding === "none") return;
     if (!isOpen) return;
     try {
-      let payload: number[] = [];
-      let finalMessage = inputMessage;
-      
-      if (isHex) {
-        const hexStr = inputMessage.replace(/[\s-]/g, "");
-        for (let i = 0; i < hexStr.length; i += 2) {
-          payload.push(parseInt(hexStr.substring(i, i + 2), 16));
-        }
-      } else {
-        if (lineEnding === "\\r") finalMessage += "\r";
-        else if (lineEnding === "\\n") finalMessage += "\n";
-        else if (lineEnding === "\\r\\n") finalMessage += "\r\n";
-        
-        const encoder = new TextEncoder();
-        const parsedMessage = finalMessage.replace(/\\r/g, "\r").replace(/\\n/g, "\n");
-        payload = Array.from(encoder.encode(parsedMessage));
-      }
+      const payload = encodeTerminalMessage(inputMessage, isHex, lineEnding);
 
       await invoke("send_serial_message", { portName: selectedPort, message: payload });
       setSentData((prev) => prev + `[Sent] ${inputMessage}\n`);

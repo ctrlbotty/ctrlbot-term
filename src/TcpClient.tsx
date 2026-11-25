@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { PinIcon, loadSavedTabs, savePinnedTabs, truncateTerminalBuffer } from "./storage";
+import { encodeTerminalMessage, formatTerminalBytes, type LineEnding } from "./terminalBytes";
 
 interface ClientEvent {
   id: string;
   event_type: string;
-  data: string;
+  data: number[];
 }
 
 export interface TcpClientTabItem {
@@ -16,7 +17,7 @@ export interface TcpClientTabItem {
   port: string;
   isConnected: boolean;
   isPinned: boolean;
-  lineEnding?: "none" | "\\r" | "\\n" | "\\r\\n";
+  lineEnding?: LineEnding;
   isHex?: boolean;
   showHexReceived?: boolean;
   showVerboseCrLf?: boolean;
@@ -49,7 +50,7 @@ function TcpClientInstance({
   const [isHex, setIsHex] = useState(initialData?.isHex ?? false);
   const [showHexReceived, setShowHexReceived] = useState(initialData?.showHexReceived ?? false);
   const [showVerboseCrLf, setShowVerboseCrLf] = useState(initialData?.showVerboseCrLf ?? true);
-  const [lineEnding, setLineEnding] = useState<"none" | "\\r" | "\\n" | "\\r\\n">(initialData?.lineEnding || "\\r\\n");
+  const [lineEnding, setLineEnding] = useState<LineEnding>(initialData?.lineEnding || "\\r\\n");
 
   const receivedDataRef = useRef<HTMLTextAreaElement>(null);
   const sentDataRef = useRef<HTMLTextAreaElement>(null);
@@ -87,17 +88,7 @@ function TcpClientInstance({
         const { event_type, data } = event.payload;
 
         if (event_type === "data") {
-          let formattedStr = "";
-          if (showHexRef.current) {
-            formattedStr = Array.from(data as unknown as number[]).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ') + ' ';
-          } else {
-            const text = new TextDecoder().decode(new Uint8Array(data as unknown as number[]));
-            if (showVerboseRef.current) {
-              formattedStr = text.replace(/\r/g, "<CR>").replace(/\n/g, "<LF>\n");
-            } else {
-              formattedStr = text;
-            }
-          }
+          const formattedStr = formatTerminalBytes(data, showHexRef.current, showVerboseRef.current);
           setReceivedData((prev) => prev + formattedStr);
         } else if (event_type === "disconnect") {
           setIsConnected(false);
@@ -163,23 +154,7 @@ function TcpClientInstance({
     if (!inputMessage && lineEnding === "none") return;
     if (!isConnected) return;
     try {
-      let payload: number[] = [];
-      let finalMessage = inputMessage;
-      
-      if (isHex) {
-        const hexStr = inputMessage.replace(/[\s-]/g, "");
-        for (let i = 0; i < hexStr.length; i += 2) {
-          payload.push(parseInt(hexStr.substring(i, i + 2), 16));
-        }
-      } else {
-        if (lineEnding === "\\r") finalMessage += "\r";
-        else if (lineEnding === "\\n") finalMessage += "\n";
-        else if (lineEnding === "\\r\\n") finalMessage += "\r\n";
-        
-        const encoder = new TextEncoder();
-        const parsedMessage = finalMessage.replace(/\\r/g, "\r").replace(/\\n/g, "\n");
-        payload = Array.from(encoder.encode(parsedMessage));
-      }
+      const payload = encodeTerminalMessage(inputMessage, isHex, lineEnding);
 
       await invoke("send_tcp_client_message", { id: clientId, message: payload });
       setSentData((prev) => prev + `[Sent] ${inputMessage}\n`);

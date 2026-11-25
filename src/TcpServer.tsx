@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { PinIcon, loadSavedTabs, savePinnedTabs, truncateTerminalBuffer } from "./storage";
+import { encodeTerminalMessage, formatTerminalBytes } from "./terminalBytes";
 
 interface ServerEvent {
   port: number;
@@ -87,17 +88,7 @@ function TcpServerInstance({
           setClients((prev) => prev.filter((c) => c !== client_id));
           setSentData((prev) => prev + `[System] Client disconnected: ${client_id}\n`);
         } else if (event_type === "data") {
-          let formattedStr = "";
-          if (showHexRef.current) {
-            formattedStr = (data as unknown as number[]).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ') + ' ';
-          } else {
-            const text = new TextDecoder().decode(new Uint8Array(data as unknown as number[]));
-            if (showVerboseRef.current) {
-              formattedStr = text.replace(/\r/g, "<CR>").replace(/\n/g, "<LF>\n");
-            } else {
-              formattedStr = text;
-            }
-          }
+          const formattedStr = formatTerminalBytes(data, showHexRef.current, showVerboseRef.current);
           setReceivedData((prev) => prev + `[${client_id}] ${formattedStr}`);
         }
       });
@@ -158,18 +149,7 @@ function TcpServerInstance({
     if (!inputMessage) return;
     try {
       const portNum = parseInt(port);
-      let payload: number[] = [];
-      
-      if (isHex) {
-        const hexStr = inputMessage.replace(/[\s-]/g, "");
-        for (let i = 0; i < hexStr.length; i += 2) {
-          payload.push(parseInt(hexStr.substring(i, i + 2), 16));
-        }
-      } else {
-        const encoder = new TextEncoder();
-        const parsedMessage = inputMessage.replace(/\\r/g, "\r").replace(/\\n/g, "\n");
-        payload = Array.from(encoder.encode(parsedMessage));
-      }
+      const payload = encodeTerminalMessage(inputMessage, isHex);
 
       await invoke("send_tcp_message", { port: portNum, message: payload });
       setSentData((prev) => prev + `[Broadcast] ${inputMessage}\n`);

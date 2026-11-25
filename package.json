@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/*.test.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/installer-art.ps1 && tauri build && node scripts/collect-installers.mjs"

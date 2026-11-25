@@ -1,97 +1,47 @@
 # CTRLbot Terminator
 
-**CTRLbot Terminator** is a modern, lightweight, and blazing-fast terminal and networking suite built specifically for testing IoT devices, raw socket communication, and serial interfaces. 
-
-Developed as a modern alternative to legacy tools like PuTTY and Hercules, CTRLbot Terminator is powered by a **Rust** backend (via [Tauri](https://tauri.app/)) for native OS-level hardware access, and a **React + Tailwind CSS** frontend for a beautiful, responsive user interface.
+CTRLbot Terminator is a Windows tool for testing IP and serial devices. Open TCP, serial and SSH sessions, or use Scan to find devices on the selected local network.
 
 ![CTRLbot Terminator with the TCP Server tab open](docs/screenshot.webp)
 
 ## Download
 
-Get the latest Windows x64 build from [Releases](https://github.com/ctrlbotty/ctrlbot-term/releases/latest):
+Get the Windows x64 installer or portable executable from [Releases](https://github.com/ctrlbotty/ctrlbot-term/releases/latest). The installer adds shortcuts and an uninstaller. The portable build needs the Microsoft Edge WebView2 Runtime. Release v1.0.0 is unsigned, so Windows may show a SmartScreen prompt.
 
-- `CTRLbot.Terminator-Setup-<version>.exe`: full installation with shortcuts and an uninstaller (recommended).
-- `CTRLbot.Terminator-<version>-portable.exe`: runs without installing. Requires the Microsoft Edge WebView2 Runtime, which Windows 11 includes; the Setup installer adds it when missing.
+## Tools
 
-The builds are not code signed, so Windows SmartScreen may warn on first run. Choose **More info**, then **Run anyway**.
+| Tab | What you can do |
+| --- | --- |
+| TCP Server | Listen on a local port, see connected clients and broadcast messages. |
+| TCP Client | Connect to a raw TCP or Telnet endpoint and choose an outbound line ending for text. |
+| Serial | Select a COM port, baud rate, data bits, parity and flow control. |
+| SSH | Open an interactive shell on a device. |
+| Network Status | Inspect local adapters and their network settings. |
+| Scan | Discover devices on the IPv4 subnet of a selected adapter. |
 
-## Features
+TCP and Serial tabs send text or hexadecimal bytes. Enter complete byte pairs such as `01 A0 FF`. Use **HEX** to view received bytes, or show `<CR>` and `<LF>` in the text log with **Verbose CRLF**.
 
-CTRLbot Terminator combines the most critical networking and hardware diagnostic tools into one unified application:
+Scan supports `/16` through `/32`. It uses ARP with ping and TCP fallbacks. Host and device names come from available discovery evidence such as mDNS, SSDP, NetBIOS and Windows name resolution. Hover over a value to see its source. MAC vendor lookup uses the bundled IEEE registry offline. You can filter by name, manufacturer, IP or MAC. Stopping a scan retains the results gathered so far.
 
-### 1. TCP Server
-- Spin up a local TCP server on any port instantly.
-- Accept and manage multiple simultaneous client connections.
-- Broadcast messages to all connected clients or view incoming data with full connection lifecycles.
+## Build from source
 
-### 2. Raw TCP (Telnet) Client
-- Connect directly to raw sockets or Telnet interfaces on your network.
-- **Troubleshooting First:** Toggle `Verbose CRLF` to explicitly see `<CR>` and `<LF>` tags in the data stream, or toggle `HEX` to view incoming byte streams in pure hexadecimal format.
-- Send plaintext or HEX arrays, with customizable line-endings (`None`, `\r`, `\n`, `\r\n`).
+Install Node.js 22.12 or newer, Rust with Cargo, and the Visual Studio C++ Build Tools. From the repository root:
 
-### 3. Serial (COM) Port Manager
-- Automatically discovers and lists available COM ports.
-- Supports comprehensive baud rates (9600 to 115200) and configuration:
-  - **Data Size:** 7 or 8 bits.
-  - **Parity:** None, Even, Odd.
-  - **Handshake (Flow Control):** OFF, RTS/CTS (Hardware), Xon/Xoff (Software).
-- Split-log view to monitor TX/RX streams with the same HEX/Verbose visualization tools available in the TCP Client.
-
-### 4. SSH Client
-- Authenticate and connect to remote devices via SSH (Port 22).
-- True terminal-emulation rendering (powered by `libssh2`) to interact with remote shells safely and securely.
-
-### 5. Scan (Windows)
-- Select a connected network port (Ethernet, Wi-Fi, or a virtual adapter); its IPv4 subnet is detected automatically.
-- Active ARP discovery finds local devices even when they block ping or have no web service. Ping and TCP probes provide fallbacks.
-- Separate Host Name, Device Name, and Manufacturer columns use mDNS hostname/service/TXT discovery, reverse mDNS PTR, SSDP/UPnP descriptions, NetBIOS, and Windows name resolution. Useful HTTP page titles are a lower-priority device-name fallback; generic titles and opaque application service IDs are not used as names.
-- Manufacturer uses explicit UPnP/mDNS data where provided and the bundled IEEE MAC registry otherwise. Locally administered/randomized MACs are not assigned a guessed vendor. Hover over values to inspect their source and MAC vendor. Missing data stays blank.
-- MAC lookup works offline using MA-L, MA-M, MA-S, and IAB assignments. Run `./scripts/update-mac-vendors.ps1` before rebuilding to refresh the public IEEE data; no device MACs are sent to a lookup service.
-- Results include links for open TCP ports 80, 443, 8080, and 8443 using their conventional HTTP/HTTPS schemes. Results stay available when switching tabs and can be filtered by names, manufacturer, IP, or MAC. Stop retains partial results.
-- Scans cover the selected adapter's entire IPv4 subnet, supporting /16 through /32. Larger networks are explicitly refused rather than silently truncated. IPv6 and driver matching are not included.
-
-## Development Setup
-
-To run or build CTRLbot Terminator from source, you will need **Node.js** and **Rust** installed on your machine. 
-
-### Prerequisites (Windows)
-1. Install [Node.js](https://nodejs.org/)
-2. Install [Rust & Cargo](https://rustup.rs/)
-3. Install **Visual Studio C++ Build Tools** (Required for compiling the native C-bindings used by the SSH client).
-
-### Running Locally
-Clone the repository and install the frontend dependencies:
-
-```bash
-git clone https://github.com/ctrlbotty/ctrlbot-term.git
-cd ctrlbot-term
-npm install
-```
-
-Start the development server (this will automatically launch the desktop app with hot-reloading):
-
-```bash
+```powershell
+npm ci
 npm run tauri dev
 ```
 
-### Building for Production
-To build the Windows x64 Setup installer and portable application:
+Run the frontend build and byte-formatting tests, then the native tests:
 
-```bash
-npm run bundle
+```powershell
+npm test
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
-The build writes these to the local `installers/` folder, which is not tracked in Git; published builds are attached to [Releases](https://github.com/ctrlbotty/ctrlbot-term/releases). The names follow CTRLbot Mirror's:
-
-- `CTRLbot Terminator-Setup-<version>.exe`: full installation, including shortcuts and uninstaller (recommended).
-- `CTRLbot Terminator-<version>-portable.exe`: run directly without installing the application. Requires the Microsoft Edge WebView2 Runtime to already be installed; settings use the Windows user profile and are shared with the installed app.
-
-The build regenerates CTRLbot-branded setup artwork, collects only the current version, and moves older downloads into `installers/archive/`. `installers/README.txt` explains each download.
-
-## Tech Stack
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS v4.
-- **Backend:** Rust, Tokio (Async Networking), `serialport` crate, `ssh2` crate.
-- **Framework:** Tauri v2.
+`npm run bundle` builds the NSIS installer and portable executable under `installers/`. See the generated `installers/README.txt` for package names and requirements. To refresh the offline MAC vendor table, see [the registry maintenance instructions](src-tauri/data/README.md).
 
 ## License
-MIT License. See [LICENSE](LICENSE). Third-party software and data included in the app are listed in [NOTICE](NOTICE).
+
+Terminator is licensed under the [MIT License](LICENSE). Third-party software and data are listed in [NOTICE](NOTICE).
